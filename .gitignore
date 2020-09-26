@@ -1,3 +1,6 @@
+# build文件夹
+build/
+
 # Prerequisites
 *.d
 
