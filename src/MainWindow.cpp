@@ -32,7 +32,7 @@ void MainWindow::setupMainWindow(){
     this->resize(mIntConfig.windowSize);
     this->setMaximumSize(mIntConfig.windowSize);
     this->setMinimumSize(mIntConfig.windowSize);
-    this->setWindowTitle(tr("EffectViewer v0.1"));
+    this->setWindowTitle(tr("EffectViewer v0.2"));
 }
 void MainWindow::setupSource(){
     QLabel *labSource = new QLabel(this);

@@ -5,17 +5,21 @@ cmake_minimum_required(VERSION 3.2)
 project(EffectViewer)
 SET(CMAKE_BUILD_TYPE "Release")
 
-# 让cmake自动去寻找Qt5
+# 设置库路径
 SET(Qt5_DIR "D:\\ProgramFiles\\Qt\\Qt5.14.2\\5.14.2\\msvc2017_64\\lib\\cmake\\Qt5" CACHE PATH "Initial cahe" FORCE)
+SET(OpenCV_DIR "D:\\lib\\opencv\\opencv\\build" CACHE PATH "Initial cahe" FORCE)
+SET(ORT_INCLUDE_DIR "D:\\Github\\github\\onnxruntime\\include\\onnxruntime")
+SET(ORT_LIB_DIR D:/Github/github/onnxruntime/build/Windows/RelWithDebInfo/RelWithDebInfo)
+
+# Qt5
 FIND_PACKAGE(Qt5 COMPONENTS Widgets REQUIRED)
 
-# opecv库
-SET(OpenCV_DIR "D:\\lib\\opencv\\opencv\\build" CACHE PATH "Initial cahe" FORCE)
+# Opecv
 FIND_PACKAGE( OpenCV REQUIRED )
 
-# oxxn runtime库
-LINK_DIRECTORIES(D:/Github/github/onnxruntime/build/Windows/RelWithDebInfo/RelWithDebInfo)
-SET (ORT_LIBS onnxruntime.lib)
+# oxxn runtime
+LINK_DIRECTORIES(${ORT_LIB_DIR})
+SET(ORT_LIBS onnxruntime.lib)
 
 
 # 采用C++14标准
@@ -58,7 +62,7 @@ QT5_ADD_RESOURCES(EffectViewer_RESOURCES_RCC ${EffectViewer_RESOURCES})
 # 这些生成的中间文件都会在build目录下，这样的话，编译器则不能定位由uic程序产生的诸如_ui_mainwindow.h等文件。所以，我们需要把build目录添加到包含目录中
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
-INCLUDE_DIRECTORIES("D:\\Github\\github\\onnxruntime\\include\\onnxruntime")
+INCLUDE_DIRECTORIES(${ORT_INCLUDE_DIR})
 
 # 生成可执行文件
 ADD_EXECUTABLE(EffectViewer 
