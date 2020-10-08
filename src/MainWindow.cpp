@@ -62,12 +62,7 @@ void MainWindow::setupInterfaces(){
     mVideo->move(50, 150);
     mVideo->setVisible(false);
 
-    mCamera = new QFrame(this);
-    mCamera->setFrameShape(QFrame::Box);
-    mCamera->setLineWidth(3);
-    mCamera->resize(frameSize);
-    mCamera->move(50, 150);
-    mCamera->setVisible(false);
+    mCamera = new CameraFrame(this, mIntConfig);
 }
 void MainWindow::sourceChanged(int index){
     changeInterface(index);
@@ -78,11 +73,17 @@ void MainWindow::changeInterface(int val){
         case 0: /* 图片 */
             mPicture->setVisible(true);
             mPicture->resetFrame();
+            mCamera->setVisible(false);
+            mCamera->mpTimer->stop();
             break;
         case 1: /* 视频 */
             mPicture->setVisible(false);
+            mCamera->setVisible(false);
+            mCamera->mpTimer->stop();
             break;
         case 2: /* 摄像头 */
+            mCamera->setVisible(true);
+            mCamera->mpTimer->start(100);
             mPicture->setVisible(false);
             break;
         default:
@@ -90,8 +91,15 @@ void MainWindow::changeInterface(int val){
     }
 }
 
+MediaFrame::MediaFrame(QWidget *parent):
+    QFrame(parent){}
+MediaFrame::~MediaFrame(){}
+void MediaFrame::BGR2RGB(const cv::Mat &bgr){
+    cv::cvtColor(bgr, mRaw_RGB, cv::COLOR_BGR2RGB);
+}
+
 PictureFrame::PictureFrame(QWidget *parent, const InterfaceConfig &mIntConfig):
-    QFrame(parent) {
+    MediaFrame(parent) {
 
     this->setFrameShape(QFrame::Box);
     this->setLineWidth(3);
@@ -99,9 +107,7 @@ PictureFrame::PictureFrame(QWidget *parent, const InterfaceConfig &mIntConfig):
     this->move(50, 150);
     this->setVisible(false);
 
-    mQImg = nullptr;
-
-    mPort = new ViewPort(this, mIntConfig, &mQImg);
+    mPort = new ViewPort(this, mIntConfig);
 
     mChooseImage = new QPushButton(this);
     mChooseImage->setFont(mIntConfig.font);
@@ -109,13 +115,21 @@ PictureFrame::PictureFrame(QWidget *parent, const InterfaceConfig &mIntConfig):
     mChooseImage->adjustSize();
     mChooseImage->move(930, 70);
 
+    mpLoadNetworks = new QPushButton(this);
+    mpLoadNetworks->setFont(mIntConfig.font);
+    mpLoadNetworks->setText(tr("Load Networks"));
+    mpLoadNetworks->adjustSize();
+    mpLoadNetworks->move(930, 550);
+
     mApply = new QPushButton(this);
     mApply->setFont(mIntConfig.font);
-    mApply->setText(tr("Apply"));
+    mApply->setText(tr("Cancel"));
     mApply->adjustSize();
-    mApply->move(930, 400);
+    mApply->setText(tr("Apply"));
+    mApply->move(1150, 550);
 
     connect(mChooseImage, SIGNAL(clicked()), this, SLOT(chooseImage()));
+    connect(mpLoadNetworks, SIGNAL(clicked()), this, SLOT(loadNetworks()));
     connect(mApply, SIGNAL(clicked()), this, SLOT(applyNetworks()));
 }
 PictureFrame::~PictureFrame(){}
@@ -123,22 +137,9 @@ PictureFrame::~PictureFrame(){}
 void PictureFrame::resetFrame(){
 
 }
-void PictureFrame::readAndShow(const QString &fileName){
+void PictureFrame::loadImage(const QString &fileName){
     /* 带有中文的路径不经toLocal8Bit转换会导致open cv无法读取 */
-    mMat = cvf::readImage(fileName.toLocal8Bit().toStdString());
-
-    showImage(mMat);
-}
-void PictureFrame::showImage(const cv::Mat &mat){
-    QImage tmp(mat.cols, mat.rows, QImage::Format_RGB888);
-    memcpy(tmp.bits(), mat.data, mat.cols*mat.rows*mat.elemSize());
-    float ratio_x = 1.0f * mPort->width() / tmp.width();
-    float ratio_y = 1.0f * mPort->height() / tmp.height();
-    float ratio = ratio_x<ratio_y?ratio_x:ratio_y;
-    
-    if (mQImg != nullptr) {delete mQImg;}
-    mQImg = new QImage(tmp.scaled((int)(ratio*tmp.width()),(int)(ratio*tmp.height())));
-    mPort->update();
+    mIntermediate = cvf::readImage(fileName.toLocal8Bit().toStdString());
 }
 void PictureFrame::chooseImage(){
     QString fileName = QFileDialog::getOpenFileName(this, 
@@ -147,42 +148,146 @@ void PictureFrame::chooseImage(){
                                                     tr("Image(*jpg *jpeg *png)"));
     qDebug() << "file name: " << fileName;
     if (fileName.size()){
-        readAndShow(fileName);
+        loadImage(fileName);
+        BGR2RGB(mIntermediate);
+        mPort->mTarget = &mRaw_RGB;
+        //mPort->update();
     }
-    
+}
+void PictureFrame::loadNetworks(){
+    NetworkManager::inst()->clearRecords();
+    NetworkManager::inst()->addRecord(ortn::Network::YOLO_V4, "yolov4_1_3_608_608_static.onnx");
+    NetworkManager::inst()->loadNetworks();
 }
 void PictureFrame::applyNetworks(){
-    ortf::ONNXRT_YOLOv4 ort1;
-    ort1.loadModel("yolov4_1_3_608_608_static.onnx");
-    ort1.printIOInfo();
 
-    //readAndShow("D:\\Github\\github\\pytorch-YOLOv4\\data\\dog.jpg");
-    std::vector<float> input_values = cvf::prepareImage(mMat, 608, 608);
-    ort1.run(input_values);
-    ort1.drawResults(mMat);
-    showImage(mMat);
+    if (mPort->mTarget == &mRaw_RGB) {
+        cv::Mat img = NetworkManager::inst()->preprocess(mRaw_RGB);
+
+        ortn::ORT_Result res_raw = NetworkManager::inst()->compute(img);
+
+        mProcessed = NetworkManager::inst()->postprocess(res_raw);
+
+        mApply->setText(tr("Cancel"));
+        mPort->mTarget = &mProcessed;
+        mPort->update();
+    }
+    else {
+        mApply->setText(tr("Apply"));
+        mPort->mTarget = &mRaw_RGB;
+        mPort->update();
+    }
 }
 
-ViewPort::ViewPort(QWidget *parent, const InterfaceConfig &mIntConfig, QImage **mQImg):
+CameraFrame::CameraFrame(QWidget *parent, const InterfaceConfig &mIntConfig):
+    MediaFrame(parent){
+    this->setFrameShape(QFrame::Box);
+    this->setLineWidth(3);
+    this->resize(mIntConfig.frameSize);
+    this->move(50, 150);
+    this->setVisible(false);
+
+    mCapture.open(0);
+    // mCapture.read(mIntermediate);
+    // qDebug() << "Capture size: (" << mIntermediate.cols << ", " << mIntermediate.rows << ")" << endl;
+    
+    mPort = new ViewPort(this, mIntConfig);
+    loadCamera();
+    mPort->mTarget = &mRaw_RGB;
+
+    mpLoadNetworks = new QPushButton(this);
+    mpLoadNetworks->setFont(mIntConfig.font);
+    mpLoadNetworks->setText(tr("Load Networks"));
+    mpLoadNetworks->adjustSize();
+    mpLoadNetworks->move(930, 550);
+
+    mApply = new QPushButton(this);
+    mApply->setFont(mIntConfig.font);
+    mApply->setText(tr("Cancel"));
+    mApply->adjustSize();
+    mApply->setText(tr("Apply"));
+    mApply->move(1150, 550);
+
+    mpTimer = new QTimer(this);
+
+    connect(mpTimer, SIGNAL(timeout()), this, SLOT(loadCamera()));
+    connect(mpLoadNetworks, SIGNAL(clicked()), this, SLOT(loadNetworks()));
+    connect(mApply, SIGNAL(clicked()), this, SLOT(applyNetworks()));
+}
+CameraFrame::~CameraFrame(){
+    mCapture.release();
+}
+
+void CameraFrame::loadCamera(){
+    //qDebug() << "loading camera..." << endl;
+    mCapture.read(mIntermediate);
+    cv::cvtColor(mIntermediate, mRaw_RGB, cv::COLOR_BGR2RGB);
+    if (mPort->mTarget == &mProcessed) {
+        mProcessed = NetworkManager::inst()->infer(mRaw_RGB);
+    }
+    
+    mPort->update();
+
+    // mCapture.read(mMat);
+    // cv::cvtColor(mMat, mMat, cv::COLOR_BGR2RGB);
+    // showImage(mMat);
+}
+void CameraFrame::loadNetworks(){
+    NetworkManager::inst()->clearRecords();
+    NetworkManager::inst()->addRecord(ortn::Network::YOLO_V4, "yolov4_1_3_608_608_static.onnx");
+    NetworkManager::inst()->loadNetworks();
+}
+void CameraFrame::applyNetworks(){
+    if (mPort->mTarget == &mRaw_RGB) {
+
+        mProcessed = NetworkManager::inst()->infer(mRaw_RGB);
+
+        mApply->setText(tr("Cancel"));
+        mPort->mTarget = &mProcessed;
+        mPort->update();
+    }
+    else {
+        mApply->setText(tr("Apply"));
+        mPort->mTarget = &mRaw_RGB;
+        mPort->update();
+    }
+}
+
+ViewPort::ViewPort(QWidget *parent, const InterfaceConfig &mIntConfig):
     QFrame(parent) {
-    this->mQImg = mQImg;
 
     this->resize(mIntConfig.portSize);
     this->move(50, 50);
     
     centerX = this->x()+this->width()/2;
     centerY = this->y()+this->height()/2;
+
+    mTarget = nullptr;
 }
 ViewPort::~ViewPort(){}
 
 void ViewPort::paintEvent(QPaintEvent *event){
-    if (*mQImg != nullptr){
+    if (mTarget != nullptr){
+
+        double ratio_x = 1.0 * width() / mTarget->cols;
+        double ratio_y = 1.0 * height() / mTarget->rows;
+        double ratio = ratio_x<ratio_y?ratio_x:ratio_y;
+
+        int w = ratio*(mTarget->cols);
+        int h = ratio*(mTarget->rows);
         
-        int drawX = centerX - (*mQImg)->width()/2;
-        int drawY = centerY - (*mQImg)->height()/2;
+        /* 将其宽度缩放为4的倍数，以便QImage绘制(其存储空间按4对齐) */
+        if (w%4) w = ((w/4)+1)*4;
+
+        cv::resize(*mTarget, temp, cv::Size2i(w, h));
+
+        mToShow = QImage(temp.cols, temp.rows, QImage::Format_RGB888);;
+        memcpy(mToShow.bits(), temp.data, temp.cols*temp.rows*temp.elemSize());
+        int drawX = centerX - mToShow.width()/2;
+        int drawY = centerY - mToShow.height()/2;
 
         mPainter.begin(this);
-        mPainter.drawImage(drawX, drawY, **mQImg);
+        mPainter.drawImage(drawX, drawY, mToShow);
         mPainter.end();
     }
 }

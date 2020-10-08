@@ -26,14 +26,16 @@ SET(EffectViewer_SOURCES
 	src/main.cpp
 	src/MainWindow.cpp
 	src/CVFunctions.cpp
-	src/ORTFunctions.cpp
+	src/ORTNetworks.cpp
+	src/NetworkManager.cpp
 )
 
 # 添加所有的头文件
 SET(EffectViewer_HEADERS 
 	include/MainWindow.h
 	include/CVFunctions.h
-	include/ORTFunctions.h
+	include/ORTNetworks.h
+	include/NetworkManager.h
 )
 
 # 添加所有的.ui文件
@@ -56,7 +58,7 @@ QT5_ADD_RESOURCES(EffectViewer_RESOURCES_RCC ${EffectViewer_RESOURCES})
 # 这些生成的中间文件都会在build目录下，这样的话，编译器则不能定位由uic程序产生的诸如_ui_mainwindow.h等文件。所以，我们需要把build目录添加到包含目录中
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
-INCLUDE_DIRECTORIES("D:\\Github\\github\\onnxruntime\\include\\onnxruntime\\core\\session")
+INCLUDE_DIRECTORIES("D:\\Github\\github\\onnxruntime\\include\\onnxruntime")
 
 # 生成可执行文件
 ADD_EXECUTABLE(EffectViewer 

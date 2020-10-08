@@ -7,17 +7,20 @@
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QFrame>
 #include <QtWidgets/QFileDialog>
+#include <QtCore/QTimer>
 #include <QtGui/QPainter>
 #include <QtGui/QImage>
 
 #include <QtCore/QDebug>
 
 #include "CVFunctions.h"
-#include "ORTFunctions.h"
+#include "NetworkManager.h"
 
 struct InterfaceConfig;
 class MainWindow;
+class MediaFrame;
 class PictureFrame;
+class CameraFrame;
 class ViewPort;
 
 struct InterfaceConfig{
@@ -42,7 +45,7 @@ private:
     QComboBox *mSource;
     PictureFrame *mPicture;
     QFrame *mVideo;
-    QFrame *mCamera;
+    CameraFrame *mCamera;
 
     void setupConfig();
     void setupMainWindow();
@@ -58,11 +61,24 @@ private slots:
     
 };
 
-class PictureFrame: public QFrame{
+class MediaFrame: public QFrame{
+    Q_OBJECT
+public:
+    explicit MediaFrame(QWidget *parent);
+    ~MediaFrame();
+
+protected:
+    void BGR2RGB(const cv::Mat &bgr);
+
+    cv::Mat mRaw_RGB;
+    cv::Mat mProcessed;
+    cv::Mat mIntermediate;
+};
+
+class PictureFrame: public MediaFrame{
     Q_OBJECT
 
 public:
-    
     explicit PictureFrame(QWidget *parent, const InterfaceConfig &mIntConfig);
     ~PictureFrame();
     void resetFrame();
@@ -70,21 +86,45 @@ public:
 private:
     ViewPort *mPort;
     QPushButton *mChooseImage;
+    QPushButton *mpLoadNetworks;
     QPushButton *mApply;
-    QImage *mQImg;
-    cv::Mat mMat;
     
-    void readAndShow(const QString &fileName);
-    void showImage(const cv::Mat &mat);
+    void loadImage(const QString &fileName);
 
 private slots:
     void chooseImage();
+    void loadNetworks();
     void applyNetworks();
+};
+
+class CameraFrame: public MediaFrame{
+    Q_OBJECT
+
+public:
+    QTimer *mpTimer;
+
+    explicit CameraFrame(QWidget *parent, const InterfaceConfig &mIntConfig);
+    ~CameraFrame();
+
+private:
+    ViewPort *mPort;
+    QPushButton *mpLoadNetworks;
+    QPushButton *mApply;
+
+    cv::VideoCapture mCapture;
+
+    //void showImage(const cv::Mat &mat);
+
+private slots:
+    void loadNetworks();
+    void applyNetworks();
+    void loadCamera();
 };
 
 class ViewPort: public QFrame {
 public:
-    explicit ViewPort(QWidget *parent, const InterfaceConfig &mIntConfig, QImage **mQImg);
+    cv::Mat *mTarget;
+    explicit ViewPort(QWidget *parent, const InterfaceConfig &mIntConfig);
     ~ViewPort();
 
 protected:
@@ -94,7 +134,8 @@ private:
     QPainter mPainter;
     int centerX;
     int centerY;
-    QImage **mQImg;
+    QImage mToShow;
+    cv::Mat temp;
 };
 
 #endif

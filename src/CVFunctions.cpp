@@ -1,47 +1,52 @@
 #include "../include/CVFunctions.h"
 
 namespace cvf{
-    cv::Mat readImage(std::string imgPath){
+    cv::Mat readImage(const std::string &imgPath){
         cv::Mat img = cv::imread(imgPath, cv::ImreadModes::IMREAD_COLOR);
-        
-        /* 将其宽度缩放为4的倍数，以便QImage绘制(其存储空间按4对齐) */
-        int width = img.cols;
-        if (width % 4){
-            cv::resize(img, img, cv::Size(((width/4)+1)*4, img.rows));
-        }
-        
-        /* 从BGR转化为RGB */
-        cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
-
         return img;
     }
-    void WHC2CWH(const cv::Mat &mat, unsigned char dest[]){
-        int width = mat.cols;
-        int height = mat.rows;
-        unsigned char *pData = mat.data;
+    void WHC2CWH(const unsigned char source[], unsigned char dest[], const int width, const int height){
         for (int i=0; i<2; i++){
             for (int j=0; j<width; j++){
                 for (int k=0; k<height; k++){
-                    dest[i*width*height+k*width+j] = pData[k*3*width+j*3+i];
+                    dest[i*width*height+k*width+j] = source[k*3*width+j*3+i];
                 }
             }
         }
-        //memcpy(pData, dest, 3*width*height*sizeof(unsigned char));
     }
-    std::vector<float> prepareImage(const cv::Mat &raw, const int width, const int height){
-        std::vector<float> ret(width*height*3);
-        cv::Mat resized;
-        /* 缩放到指定尺寸 */
-        cv::resize(raw, resized, cv::Size(width, height));
-
-        /* 将W x H x C转换为C x W x H */
+    void WHC2CWH(const float source[], float dest[], const int width, const int height){
         for (int i=0; i<2; i++){
             for (int j=0; j<width; j++){
                 for (int k=0; k<height; k++){
-                    ret[i*width*height+k*width+j] = resized.data[k*3*width+j*3+i]/255.0f;
+                    dest[i*width*height+k*width+j] = source[k*3*width+j*3+i];
                 }
             }
         }
-        return ret;
+    }
+    void CWH2WHC(const unsigned char source[], unsigned char dest[], const int width, const int height){
+        for (int i=0; i<2; i++){
+            for (int j=0; j<width; j++){
+                for (int k=0; k<height; k++){
+                    dest[k*3*width+j*3+i] = source[i*width*height+k*width+j];
+                }
+            }
+        }
+    }
+    float intersectionOverUnion(float x11, float y11, float x12, float y12,
+                                float x21, float y21, float x22, float y22){
+        /* 左上角坐标 */
+        float x1 = x11>x21?x11:x21;
+        float y1 = y11>y21?y11:y21;
+
+        /* 右下角坐标 */
+        float x2 = x12<x22?x12:x22;
+        float y2 = y12<y22?y12:y22;
+
+        float w = x2>x1?x2-x1:0;
+        float h = y2>y1?y2-y1:0;
+
+        float inter_ = w * h;
+        float union_ = (x12-x11)*(y12-y11)+(x22-x21)*(y22-y21)-inter_;
+        return inter_/union_;
     }
 }
