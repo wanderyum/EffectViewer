@@ -146,17 +146,18 @@ void PictureFrame::chooseImage(){
                                                     tr("Please Choose an image: "),
                                                     ".",
                                                     tr("Image(*jpg *jpeg *png)"));
-    qDebug() << "file name: " << fileName;
+    qDebug() << "File name: " << fileName;
     if (fileName.size()){
         loadImage(fileName);
         BGR2RGB(mIntermediate);
         mPort->mTarget = &mRaw_RGB;
-        //mPort->update();
+        mPort->update();
     }
 }
 void PictureFrame::loadNetworks(){
     NetworkManager::inst()->clearRecords();
     NetworkManager::inst()->addRecord(ortn::Network::YOLO_V4, "yolov4_1_3_608_608_static.onnx");
+    //NetworkManager::inst()->addRecord(ortn::Network::YOLO_V4, "yolov4.onnx");
     NetworkManager::inst()->loadNetworks();
 }
 void PictureFrame::applyNetworks(){
@@ -188,8 +189,6 @@ CameraFrame::CameraFrame(QWidget *parent, const InterfaceConfig &mIntConfig):
     this->setVisible(false);
 
     mCapture.open(0);
-    // mCapture.read(mIntermediate);
-    // qDebug() << "Capture size: (" << mIntermediate.cols << ", " << mIntermediate.rows << ")" << endl;
     
     mPort = new ViewPort(this, mIntConfig);
     loadCamera();
@@ -219,7 +218,6 @@ CameraFrame::~CameraFrame(){
 }
 
 void CameraFrame::loadCamera(){
-    //qDebug() << "loading camera..." << endl;
     mCapture.read(mIntermediate);
     cv::cvtColor(mIntermediate, mRaw_RGB, cv::COLOR_BGR2RGB);
     if (mPort->mTarget == &mProcessed) {
@@ -227,10 +225,6 @@ void CameraFrame::loadCamera(){
     }
     
     mPort->update();
-
-    // mCapture.read(mMat);
-    // cv::cvtColor(mMat, mMat, cv::COLOR_BGR2RGB);
-    // showImage(mMat);
 }
 void CameraFrame::loadNetworks(){
     NetworkManager::inst()->clearRecords();

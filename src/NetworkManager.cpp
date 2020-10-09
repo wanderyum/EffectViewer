@@ -18,7 +18,6 @@ void NetworkManager::addRecord(ortn::Network networkType, const std::string &pat
             pModel = nullptr;
     }
     if (pModel) {
-        //pModel->loadModel(path);
         record.model = pModel;
         mRecords.push_back(record);
     }
@@ -44,14 +43,10 @@ void NetworkManager::loadNetworks(){
     }
 }
 cv::Mat NetworkManager::preprocess(const cv::Mat &raw){
-    // cv::Mat ret(raw.cols, raw.rows, CV_32FC3);
 
+    /* 复制一份输入备用 */
     inputMat = raw.clone();
 
-    // /* 将输入从[0, 255]的unsigned char转换为[0, 1]的float */
-    // raw.convertTo(ret, CV_32FC3, 1.0f/255);
-    
-    // return ret;
     return raw;
 }
 ortn::ORT_Result NetworkManager::compute(cv::Mat &input){
@@ -73,13 +68,6 @@ ortn::ORT_Result NetworkManager::compute(cv::Mat &input){
         return ret;
     }
 }
-cv::Mat NetworkManager::infer(const cv::Mat &input){
-    cv::Mat img = NetworkManager::inst()->preprocess(input);
-
-    ortn::ORT_Result res_raw = NetworkManager::inst()->compute(img);
-
-    return NetworkManager::inst()->postprocess(res_raw);
-}
 cv::Mat NetworkManager::postprocess(const ortn::ORT_Result &res){
     if (res.resType == ortn::ResultType::FINAL) {
         if (res.misType == ortn::MissionType::OBJECT_DETECTION) {
@@ -99,6 +87,13 @@ cv::Mat NetworkManager::postprocess(const ortn::ORT_Result &res){
         }
     }
     return cv::Mat();
+}
+cv::Mat NetworkManager::infer(const cv::Mat &input){
+    cv::Mat img = NetworkManager::inst()->preprocess(input);
+
+    ortn::ORT_Result res_raw = NetworkManager::inst()->compute(img);
+
+    return NetworkManager::inst()->postprocess(res_raw);
 }
 void NetworkManager::markObject(cv::Mat &src, const std::string &className, 
                     float conf, float x1, float y1, float x2, float y2) {

@@ -113,8 +113,6 @@ private:
 
     cv::VideoCapture mCapture;
 
-    //void showImage(const cv::Mat &mat);
-
 private slots:
     void loadNetworks();
     void applyNetworks();

@@ -40,7 +40,7 @@ namespace ortn{
             input_nodes_dims.push_back(tensor_info.GetShape());
         }
 
-        /* 获取模型输入信息 */
+        /* 获取模型输出信息 */
         num_output_nodes = session->GetOutputCount();
         for (int i=0; i<num_output_nodes; i++) {
             output_node_names.push_back(session->GetOutputName(i, allocator));
@@ -99,7 +99,9 @@ namespace ortn{
     
     ORT_YOLOv4::ORT_YOLOv4():
         threshold_conf(0.4f),
-        threshold_nms(0.6f) {}
+        threshold_nms(0.6f) {
+        channel_first = true;
+    }
     ORT_Result ORT_YOLOv4::run(cv::Mat &input_values){
         /* 创建输入 */
         Ort::Value input_tensor = prepareInput(input_values);
@@ -111,22 +113,47 @@ namespace ortn{
                                             1,
                                             output_node_names.data(),
                                             2);
-
+        std::cerr << "output_tensors.size: " << output_tensors.size() << std::endl;
+        auto inf = output_tensors[0].GetTensorTypeAndShapeInfo();
+        auto sp = inf.GetShape();
+        std::cerr << "shape:\n";
+        for (auto &v: sp){
+            std::cerr << v << " ";
+        }
+        std::cerr << "\n";
+        inf = output_tensors[1].GetTensorTypeAndShapeInfo();
+        sp = inf.GetShape();
+        std::cerr << "shape:\n";
+        for (auto &v: sp){
+            std::cerr << v << " ";
+        }
+        std::cerr << "\n";
         return parseResults(output_tensors);
     }
     Ort::Value ORT_YOLOv4::prepareInput(const cv::Mat &input_values){
-        cv::resize(input_values, raw, cv::Size(input_nodes_dims[0][2], input_nodes_dims[0][3]));
-        temp = cv::Mat(raw.cols, raw.rows, CV_8UC3);
-        cvf::WHC2CWH(raw.data, temp.data, raw.cols, raw.rows);
-        temp.convertTo(temp, CV_32FC3, 1.0f/255);
+        /* opencv的resize函数处理浮点型数据好像有点问题，因此先resize再转换浮点 */
+        if (channel_first) {
+            cv::resize(input_values, raw, cv::Size(input_nodes_dims[0][2], input_nodes_dims[0][3]));
+            temp = cv::Mat(raw.cols, raw.rows, CV_8UC3);
+            cvf::WHC2CWH(raw.data, temp.data, raw.cols, raw.rows);
+            temp.convertTo(temp, CV_32FC3, 1.0f/255);
+        }
+        else {
+            cv::resize(input_values, raw, cv::Size(input_nodes_dims[0][1], input_nodes_dims[0][2]));
+            temp = cv::Mat(raw.cols, raw.rows, CV_8UC3);
+            raw.convertTo(temp, CV_32FC3, 1.0f/255);
+        }
 
+        /* input_nodes_dims[0][0]有可能为-1 */
+        auto dims = input_nodes_dims[0];
+        dims[0] = 1;
 
         auto memory_info = Ort::MemoryInfo::CreateCpu(  OrtAllocatorType::OrtArenaAllocator, 
                                                         OrtMemType::OrtMemTypeDefault);
         Ort::Value ret = Ort::Value::CreateTensor<float>(memory_info,
                                                         (float*)(temp.data),
                                                         raw.cols*raw.rows*3,
-                                                        input_nodes_dims[0].data(),
+                                                        dims.data(),
                                                         4);
         raw = input_values.clone();
 
@@ -204,6 +231,30 @@ namespace ortn{
                 candidate.push_back(cand);
             }
         }
+        // auto shape1 = arr[0].GetTensorTypeAndShapeInfo().GetShape();
+        // auto shape2 = arr[1].GetTensorTypeAndShapeInfo().GetShape();
+        // int total1 = shape1[1]*shape1[2]*shape1[3];
+        // int total2 = shape2[1]*shape2[2]*shape2[3];
+        // for(int i=0; i<total1; i++){
+        //     float max_value = res1[i*85+5];
+        //     int max_index = 0;
+        //     for (int j=0; j<80; j++){
+        //         if (res1[i*85+5+j] > max_value) {
+        //             max_value = res1[i*85+5+j];
+        //             max_index = j;
+        //         }
+        //     }
+        //     if (max_value > threshold_conf){
+        //     //if (res1[i*85+4] > threshold_conf){
+        //         std::cerr << "candidate: " << max_index << " "
+        //         << max_value << " " << res1[i*85] << " " << res1[i*85+1]
+        //         << " " << res1[i*85+2] << " " << res1[i*85+3] << "\n";
+        //         Yolo_Candidate cand = { max_index, max_value,
+        //                                 res1[i*85], res1[i*85+1],
+        //                                 res1[i*85+2], res1[i*85+3]};
+        //         candidate.push_back(cand);
+        //     }
+        // }
         if (candidate.size() == 0){
             ORT_Result ret = {  ortn::ResultType::NO_RESULT,
                                 ortn::ResultFormat::CV_MAT,
@@ -245,14 +296,13 @@ namespace ortn{
             ret.stringVector = names;
             return ret;
         }
-        
     }
     std::vector<std::string> ORT_YOLOv4::loadNames(const std::string &path){
         std::vector<std::string> names;
         std::string tmp;
         std::ifstream infile(path);
         if (!infile.is_open()){
-            std::cerr << "Could not open: " << path << std::endl;
+            std::cerr << "Cannot open: " << path << std::endl;
             return names;
         }
         while (!infile.eof()) {
@@ -262,6 +312,4 @@ namespace ortn{
         infile.close();
         return names;
     }
-    
-    
 }

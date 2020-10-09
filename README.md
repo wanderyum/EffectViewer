@@ -32,7 +32,8 @@ Effect Viewer的使用：编译好之后点点点就行了。
     cmake ..
     cmake --build .
     ```
-3. 在`build/Debug/`文件夹中运行`EffectViewer`或`EffectViewer.exe`。
+3. 将`onnxruntime.dll`和ONNX格式的神经网络(比如`yolov4.onnx`)拷贝到`build/Debug/`文件夹中。
+4. 在`build/Debug/`文件夹中运行`EffectViewer`或`EffectViewer.exe`。
 
 ## To-do list: ##
  - 数据源中增加“视频”这一类型

@@ -22,7 +22,6 @@ namespace cvf{
      * @param dest 转换后的数据((unsigned char[]))。
      */
     void WHC2CWH(const unsigned char source[], unsigned char dest[], const int width, const int height);
-    void WHC2CWH(const float source[], float dest[], const int width, const int height);
     
     /** @brief 用于将输入(unsigned char[])的存储格式从C*H*W转换为W*H*C。
      * 
